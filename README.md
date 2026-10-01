@@ -38,49 +38,59 @@ The semantic model is engineered strictly following the **Star Schema (Kimball m
 
 ---
 
-## 📐 Key DAX Measures & Metrics Repository
+## 📐 Semantic Modeling & Key DAX Architecture
 
-All business logic is centralized in a dedicated `_Measures` table to maintain a clean semantic model and optimize calculation flow:
+All business logic is isolated within a dedicated `_Measures` table. Key calculations leverage row-by-row iteration across dimensions and explicit filter contexts:
 
-* **Core Demographics & Volume:** `[Total Headcount]`, `[Average Age]`
-* **Talent & Evaluation:** `[Avg Performance]`, `[Avg Potential]`, `[High Performers %]`
-* **Compensation & Mobility:** `[Avg Salary]`, `[Average Compa-Ratio]`, `[Promotion Rate]`, `[Turnover Rate]`
+* **Core Volume & Demographics:** `[Total Headcount]`, `[Average Age]`
+* **Talent & Mobility:** `[Avg Performance]`, `[Avg Potential]`, `[Promotion Rate]`
+* **Strategic Indicators:** `[High Performers %]`, `[Average Compa-Ratio]`, `[Turnover Rate]`
 
 ### Core Analytical Measures Highlight:
 
-#### 1. High Performers %
-Calculates the proportion of employees achieving top-tier performance ratings relative to total headcount:
+#### 1. Internal Compa-Ratio (Relational Row Iteration)
+Iterates over each employee record, retrieving the respective pay grade midpoint from `Dim_JobRole` via `RELATED` to compute salary alignment against internal ranges:
+```dax
+Average Compa-Ratio = 
+AVERAGEX(
+    Fact_Performance,
+    DIVIDE(
+        Fact_Performance[AnnualSalary],
+        RELATED(Dim_JobRole[SalaryMid]),
+        1
+    )
+)
+
+```
+
+#### 2. High Performers % (Context Modification)
+
+Calculates the proportion of top-tier talent by overriding the filter context on evaluation scores:
+
 ```dax
 High Performers % = 
 DIVIDE(
-    CALCULATE(COUNTROWS(Fact_Performance), Fact_Performance[PerformanceRating] >= 4),
-    [Total Headcount],
+    CALCULATE(
+        COUNTROWS(Fact_Performance),
+        Fact_Performance[PerformanceRating] >= 4
+    ),
+    COUNTROWS(Fact_Performance),
     0
 )
 
 ```
 
-#### 2. Turnover Rate
+#### 3. Turnover Rate (Organizational Attrition)
 
-Monitors attrition across segments to inform retention and succession strategies:
+Quantifies workforce attrition dynamically across organizational slices:
 
 ```dax
 Turnover Rate = 
 DIVIDE(
-    CALCULATE(COUNTROWS(Fact_Performance), Fact_Performance[LeftCompany] = 1),
+    SUM(Fact_Performance[LeftCompany]),
     [Total Headcount],
     0
 )
-
-```
-
-#### 3. Average Compa-Ratio
-
-Measures organizational pay positioning directly against predefined internal pay grade midpoints:
-
-```dax
-Average Compa-Ratio = 
-AVERAGE(Fact_Performance[CompaRatio])
 
 ```
 
@@ -89,7 +99,7 @@ AVERAGE(Fact_Performance[CompaRatio])
 ## 🔍 Key Insights & Strategic Findings
 
 1. **Compensation Alignment:** Identified departmental variations where average compa-ratio skewed below 96% despite sustained top-quartile performance ratings.
-2. **Talent Distribution:** Mapped critical mass in the 9-box performance vs. potential matrix, isolating specific units requiring immediate succession planning.
+2. **Talent Distribution:** Mapped critical mass in the performance vs. potential matrix, isolating specific units requiring immediate succession planning.
 3. **Workforce Demographics:** Highlighted age group concentrations (predominantly 20–39 age bands) to inform long-term retention and career-path progression policies.
 
 ---
@@ -98,7 +108,7 @@ AVERAGE(Fact_Performance[CompaRatio])
 
 * **Power BI Desktop:** Advanced data visualization, bookmarks, interactive matrix visuals, and card-based KPI layouts.
 * **Power Query (M):** Data ingestion, schema standardization, data type optimization, and star schema dimensional staging.
-* **DAX:** Dynamic aggregation, conditional filtering, and custom KPI ratio formulas.
+* **DAX:** Dynamic aggregation, conditional filtering, iterative evaluation (`AVERAGEX`), and relational lookups (`RELATED`).
 
 ---
 
